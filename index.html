@@ -38,16 +38,18 @@ canvas{display:block;position:fixed;inset:0}
 #dash:active{background:#f0fa}
 #mute{position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:6;background:#12062a;border:1px solid #0ff6;border-radius:20px;color:#fff;font-size:16px;padding:4px 12px;font-family:inherit;pointer-events:auto}
 body.touch #stick,body.touch #dash{display:block}
+#pause{position:fixed;top:10px;left:calc(50% + 40px);z-index:6;background:#12062a;border:1px solid #0ff6;border-radius:20px;color:#fff;font-size:16px;padding:4px 12px;font-family:inherit;display:none;pointer-events:auto}
 </style>
 </head>
 <body>
 <div id="hud"><div><div id="hpw"><div id="hp"><i></i><em id="hpt"></em></div></div><div id="combo"></div></div><div class="r"><div id="lv"></div><div id="sc"></div></div></div>
 <div id="msg"></div><div id="sub"></div>
 <div id="vig"></div><div id="lowhp"></div>
-<button id="mute">🔊</button>
+<button id="mute">🔊</button><button id="pause">⏸</button>
 <div id="stick"><div id="knob"></div></div>
 <button id="dash">اندفاع</button>
 <div class="ov on" id="start"><h1>عاصفة النيون</h1><p>سفينتك بتضرب أوتوماتيك أقرب عدو. حرّك بالعصا (أو WASD)، واندفع بالزر (أو المسطرة). اخلّص كل موجة، اختار تطوير، وواجه زعيم كل ٥ مراحل. جمع البلّورات عشان شحنة الاندفاع.</p><button class="btn" id="go">ابدأ</button></div>
+<div class="ov" id="pz"><h1 style="font-size:36px">إيقاف مؤقت</h1><p id="pzs"></p><button class="btn" id="resume">كمّل</button></div>
 <div class="ov" id="up"><h1 style="font-size:32px">اختار تطوير</h1><div class="cards" id="cards"></div></div>
 <div class="ov" id="over"><h1 style="color:#f55;text-shadow:0 0 24px #f00">انتهت اللعبة</h1><p id="fin"></p><button class="btn" id="again">العب تاني</button></div>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
@@ -360,10 +362,17 @@ function update(dt,t){
  $("combo").textContent=combo>=2?"سلسلة ×"+AR(combo):"";
  $("lowhp").style.display=P.hp<P.max*.3?"block":"none";
 }
-let last=performance.now(),camY=15,camZ=10;
+let last=performance.now(),camY=15,camZ=10,paused=false,vt=performance.now();
+function setPaused(p){if(state!="play"&&p)return;if(p===paused)return;paused=p;$("pz").classList.toggle("on",p);$("pause").textContent=p?"▶":"⏸";
+ if(p){jid=null;joy.x=joy.y=0;kn.style.left=kn.style.top="40px";$("pzs").textContent="المرحلة "+AR(level)+" · النقاط "+AR(score)+" · قتلى "+AR(kills)+(P?" · صحة "+AR(Math.max(0,P.hp)):"")}else{dashReq=false}}
+$("pause").onclick=()=>setPaused(!paused);$("resume").onclick=()=>setPaused(false);
+addEventListener("keydown",e=>{if(e.key=="Escape"||e.key=="p"||e.key=="P")setPaused(!paused)});
+document.addEventListener("visibilitychange",()=>{if(document.hidden)setPaused(true)});
 function frame(t){
- const dt=Math.min(.05,(t-last)/1000);last=t;
- update(dt,t);
+ const dt=paused?0:Math.min(.05,(t-last)/1000);last=t;
+ if(!paused)vt+=dt*1000;
+ $("pause").style.display=(state=="play"||paused)?"block":"none";
+ if(!paused)update(dt,vt);
  // ambient animation
  gridFar.position.x=(t/140)%8;gridFar.position.z=(t/170)%8;
  for(let i=0;i<rocks.length;i++){const rk=rocks[i];rk.rotation.x+=rk.userData.rx*dt;rk.rotation.y+=rk.userData.ry*dt;
@@ -406,4 +415,5 @@ requestAnimationFrame(frame);
 </script>
 </body>
 </html>
+
 
