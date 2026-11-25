@@ -26,6 +26,10 @@ canvas{display:block;position:fixed;inset:0}
 .ov.on{display:flex}
 .ov h1{font-size:44px;margin:0;color:#0ff;text-shadow:0 0 24px #0ff,0 0 48px #f0f}
 .ov p{margin:0;color:#c9b8ff;max-width:420px;line-height:1.7}
+.btn2{background:#111;color:#0ff;border:2px solid #0ff;border-radius:40px;padding:10px 26px;font-size:18px;font-weight:900;font-family:inherit;margin-top:12px;pointer-events:auto}
+#atoast{position:fixed;top:70px;left:50%;transform:translate(-50%,-30px);background:#120022ee;border:2px solid #0ff;color:#ffe;padding:10px 22px;border-radius:30px;font-weight:900;z-index:99;opacity:0;transition:.4s;pointer-events:none;box-shadow:0 0 24px #0ff8}
+#atoast.on{opacity:1;transform:translate(-50%,0)}
+#achl{text-align:right;max-height:55vh;overflow:auto;direction:rtl;line-height:2}
 .btn{background:linear-gradient(90deg,#f0f,#0ff);color:#05010f;border:0;border-radius:40px;padding:16px 44px;font-size:22px;font-weight:900;font-family:inherit;box-shadow:0 0 30px #f0f8;pointer-events:auto}
 .btn:active{transform:scale(.94)}
 .cards{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
@@ -48,10 +52,11 @@ body.touch #stick,body.touch #dash{display:block}
 <button id="mute">🔊</button><button id="pause">⏸</button>
 <div id="stick"><div id="knob"></div></div>
 <button id="dash">اندفاع</button>
-<div class="ov on" id="start"><h1>عاصفة النيون</h1><p>سفينتك بتضرب أوتوماتيك أقرب عدو. حرّك بالعصا (أو WASD)، واندفع بالزر (أو المسطرة). اخلّص كل موجة، اختار تطوير، وواجه زعيم كل ٥ مراحل. جمع البلّورات عشان شحنة الاندفاع.</p><button class="btn" id="go">ابدأ</button></div>
+<div class="ov on" id="start"><h1>عاصفة النيون</h1><p>سفينتك بتضرب أوتوماتيك أقرب عدو. حرّك بالعصا (أو WASD)، واندفع بالزر (أو المسطرة). اخلّص كل موجة، اختار تطوير، وواجه زعيم كل ٥ مراحل. جمع البلّورات عشان شحنة الاندفاع.</p><button class="btn" id="go">ابدأ</button><br><button class="btn2" id="achb">🏅 الإنجازات</button></div>
+<div class="ov" id="ach"><h1 style="font-size:32px">الإنجازات</h1><div id="achl"></div><p id="achs"></p><button class="btn" id="achx">رجوع</button></div><div id="atoast"></div>
 <div class="ov" id="pz"><h1 style="font-size:36px">إيقاف مؤقت</h1><p id="pzs"></p><button class="btn" id="resume">كمّل</button></div>
 <div class="ov" id="up"><h1 style="font-size:32px">اختار تطوير</h1><div class="cards" id="cards"></div></div>
-<div class="ov" id="over"><h1 style="color:#f55;text-shadow:0 0 24px #f00">انتهت اللعبة</h1><p id="fin"></p><button class="btn" id="again">العب تاني</button></div>
+<div class="ov" id="over"><h1 style="color:#f55;text-shadow:0 0 24px #f00">انتهت اللعبة</h1><p id="fin"></p><button class="btn2" id="achb2">🏅 الإنجازات</button> <button class="btn" id="again">العب تاني</button></div>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
 <script type="module">
 import * as THREE from "three";
@@ -175,6 +180,15 @@ const ESTAT={chaser:{hp:20,spd:4.4,r:1,sc:10,dmg:10},mini:{hp:8,spd:5.5,r:.6,sc:
 // ---- game state ----
 let blades=[],P,bullets=[],ebul=[],enemies=[],parts=[],gems=[],level,score,kills,toSpawn,spawnT,state="menu",shake=0,msgT=0,subT=0,stopT=0,combo=0,comboT=0,best=0;
 try{best=+localStorage.ns3best||0}catch(e){}
+const ACHS=[["k100","صيّاد","اقتل 100 عدو",x=>x.kills>=100],["k1000","قاتل النيون","اقتل 1000 عدو",x=>x.kills>=1000],["k5000","سفّاح العاصفة","اقتل 5000 عدو",x=>x.kills>=5000],["l5","وصلت 5","وصّل المرحلة 5",x=>x.lv>=5],["l10","وصلت 10","وصّل المرحلة 10",x=>x.lv>=10],["l20","وصلت 20","وصّل المرحلة 20",x=>x.lv>=20],["b1","قاتل زعيم","اقتل زعيم",x=>x.boss>=1],["b5","صيّاد الزعماء","اقتل 5 زعماء",x=>x.boss>=5],["c20","سلسلة 20","سلسلة ×20",x=>x.bc>=20],["c40","سلسلة 40","سلسلة ×40",x=>x.bc>=40],["r10","مثابر","العب 10 مرات",x=>x.runs>=10],["s5k","نقاط عالية","5000 نقطة في جولة",x=>x.bs>=5000]];
+let ST={kills:0,lv:0,boss:0,bc:0,runs:0,bs:0},AH={};
+try{ST=Object.assign(ST,JSON.parse(localStorage.ns3stats))}catch(e){}
+try{AH=JSON.parse(localStorage.ns3ach)||{}}catch(e){}
+function chkAch(){try{localStorage.ns3stats=JSON.stringify(ST)}catch(e){}
+ for(const a of ACHS)if(!AH[a[0]]&&a[3](ST)){AH[a[0]]=1;try{localStorage.ns3ach=JSON.stringify(AH)}catch(e){}
+  const t=$("atoast");t.textContent="🏅 إنجاز جديد: "+a[1];t.classList.add("on");clearTimeout(chkAch.t);chkAch.t=setTimeout(()=>t.classList.remove("on"),2600)}}
+function showAch(from){$("achl").innerHTML=ACHS.map(a=>(AH[a[0]]?"✅ ":"🔒 ")+"<b>"+a[1]+"</b> · "+a[2]).join("<br>");
+ $("achs").textContent="قتلى "+ST.kills+" · جولات "+ST.runs+" · زعماء "+ST.boss+" · أعلى سلسلة ×"+ST.bc+" · أعلى مرحلة "+ST.lv;$("ach").classList.add("on");$("achx").onclick=()=>$("ach").classList.remove("on")}
 const keys={};let joy={x:0,y:0},dashReq=false;
 function newGame(){
  for(const a of [bullets,ebul,enemies,parts,gems])a.forEach(o=>scene.remove(o.grp||o.m));
@@ -224,7 +238,7 @@ function shoot(dx,dz,dmg,crit){const m=new THREE.Mesh(bGeo,crit?pbCrit:pbMat);if
 function hurt(d){if(P.inv>0||state!="play")return;P.hp-=d;P.inv=.5;shake=Math.max(shake,.5);combo=0;
  boom(P.x,1,P.z,0xff0044,10);SFX.hurt();try{navigator.vibrate&&navigator.vibrate(45)}catch(e){}$("vig").style.opacity=1;setTimeout(()=>$("vig").style.opacity=0,130);
  if(P.hp<=0){P.hp=0;gameOver()}}
-function gameOver(){state="over";let bl=0;try{bl=Math.max(+localStorage.ns3lv||0,level);localStorage.ns3lv=bl}catch(e){}best=Math.max(best,score);try{localStorage.ns3best=best}catch(e){}
+function gameOver(){state="over";ST.runs++;ST.lv=Math.max(ST.lv,level);ST.bs=Math.max(ST.bs,score);chkAch();let bl=0;try{bl=Math.max(+localStorage.ns3lv||0,level);localStorage.ns3lv=bl}catch(e){}best=Math.max(best,score);try{localStorage.ns3best=best}catch(e){}
  $("fin").textContent="وصلت المرحلة "+AR(level)+" · نقاطك "+AR(score)+" · قتلت "+AR(kills)+(best>score?" · الأفضل: "+AR(best):" · رقم قياسي جديد!")+" · أعلى مرحلة: "+AR(bl);
  $("over").classList.add("on")}
 const UPS=[["🔫","ضرر +٣٥٪",()=>P.dmg*=1.35],["⚡","سرعة ضرب +٣٠٪",()=>P.rate*=1.3],
@@ -246,7 +260,7 @@ function killEnemy(e){
  boom(e.x,1,e.z,ESTAT[e.t]?({bomber:0xff2200,bossC:0x22ff66,chaser:0xff3355,mini:0x33ff88,dasher:0xffdd22,shooter:0xaa44ff,tank:0xff9900,splitter:0x33ff88,bossA:0xff0000,bossB:0x0044ff})[e.t]:0xffffff,e.t.startsWith("boss")?60:e.t=="tank"?22:14);
  ringFX(e.x,e.z,0xffffff);
  combo++;comboT=3;const cm=1+Math.min(combo,20)*.05;
- score+=Math.round(ESTAT[e.t].sc*cm);kills++;
+ score+=Math.round(ESTAT[e.t].sc*cm);kills++;ST.kills++;ST.bc=Math.max(ST.bc,combo);if(e.t.indexOf('boss')==0)ST.boss++;chkAch();
  if(combo>0&&combo%10==0){P.hp=Math.min(P.max,P.hp+3);say("سلسلة ×"+AR(combo)+" +٣ صحة",null,900);SFX.combo(Math.min(combo,20))}
 if(P.steal>0)P.hp=Math.min(P.max,P.hp+P.steal);
  if(e.el||e.t.startsWith("boss")||Math.random()<.04)dropPickup(e.x,e.z);
@@ -406,8 +420,9 @@ const jend=e=>{if(e.pointerId==jid){jid=null;joy.x=joy.y=0;kn.style.left=kn.styl
 st.addEventListener("pointerup",jend);st.addEventListener("pointercancel",jend);
 $("dash").addEventListener("pointerdown",()=>dashReq=true);
 $("go").onclick=()=>{if(!AC)try{AC=new (window.AudioContext||window.webkitAudioContext)()}catch(e){}$("start").classList.remove("on");newGame()};
+$("achb").onclick=showAch;$("achb2").onclick=showAch;
 $("again").onclick=()=>{$("over").classList.remove("on");newGame()};
-window.SC=scene;window.G={blades:()=>blades.length,P:()=>P,get s(){return{state,level,score,kills,hp:P&&P.hp,en:enemies.length,q:toSpawn&&toSpawn.length,bul:bullets.length,gems:gems.length,combo,gl:renderer.getContext().constructor.name,fps:Math.round(1/Math.max(.001,(performance.now()-last)/1000))}},
+window.SC=scene;window.G={ST:()=>ST,AH:()=>AH,chk:chkAch,over:()=>gameOver(),blades:()=>blades.length,P:()=>P,get s(){return{state,level,score,kills,hp:P&&P.hp,en:enemies.length,q:toSpawn&&toSpawn.length,bul:bullets.length,gems:gems.length,combo,gl:renderer.getContext().constructor.name,fps:Math.round(1/Math.max(.001,(performance.now()-last)/1000))}},
  spawn:t=>spawn(t),cheat(){if(P){P.dmg=500;P.hp=P.max=9999}},start:()=>$("go").click(),
  pick:()=>{const b=document.querySelector(".card");b&&b.click()},stand(x,z){P.x=x;P.z=z},
  kill(){enemies.forEach(e=>e.hp=0)},sethp(v){P.hp=v;P.inv=0},hitme(d){P.inv=0;hurt(d)},jump(n){enemies.forEach(e=>scene.remove(e.grp));enemies=[];toSpawn=[];level=n-1;nextLevel()}};
@@ -415,5 +430,6 @@ requestAnimationFrame(frame);
 </script>
 </body>
 </html>
+
 
 
