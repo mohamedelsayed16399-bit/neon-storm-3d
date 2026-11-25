@@ -145,6 +145,14 @@ function mkTank(){const g=new THREE.Group();const m=new THREE.Mesh(new THREE.Box
 function mkSplitter(){const g=new THREE.Group();const m=new THREE.Mesh(new THREE.IcosahedronGeometry(1.05,1),body(0x33ff88));g.add(m);
  const w=new THREE.Mesh(new THREE.IcosahedronGeometry(1.35,1),new THREE.MeshBasicMaterial({color:0x33ff88,wireframe:true,transparent:true,opacity:.5}));g.add(w);
  return{grp:g,flash:[m.material],tick(e,dt){w.rotation.y+=dt*2;w.rotation.z+=dt}}}
+function mkBomber(){const g=new THREE.Group();const m=new THREE.Mesh(new THREE.SphereGeometry(.9,12,10),body(0xff2200,1.1));g.add(m);
+ const sp=[];for(let i=0;i<6;i++){const c=new THREE.Mesh(new THREE.ConeGeometry(.18,.6,5),body(0xffaa00,1.2));const a=i/6*Math.PI*2;c.position.set(Math.cos(a)*.95,0,Math.sin(a)*.95);c.rotation.z=-Math.cos(a)*Math.PI/2;c.rotation.x=Math.sin(a)*Math.PI/2;g.add(c)}
+ const warn=new THREE.Mesh(new THREE.RingGeometry(4.6,5,32),new THREE.MeshBasicMaterial({color:0xff3300,side:2,transparent:true,opacity:0}));warn.rotation.x=-Math.PI/2;warn.position.y=-.9;g.add(warn);
+ return{grp:g,flash:[m.material],tick(e,dt,t){m.scale.setScalar(1+(e.state==1?Math.sin(t/40)*.18:Math.sin(t/200)*.05));warn.material.opacity=e.state==1?.35+Math.sin(t/50)*.25:0;g.rotation.y+=dt*2}}}
+function mkBossC(){const g=new THREE.Group();const m=new THREE.Mesh(new THREE.IcosahedronGeometry(2.3,1),body(0x22ff66,1));g.add(m);
+ const orbs=new THREE.Group();for(let i=0;i<5;i++){const o=new THREE.Mesh(new THREE.SphereGeometry(.55,10,8),body(0xffff33,1.5));const a=i/5*Math.PI*2;o.position.set(Math.cos(a)*3.5,0,Math.sin(a)*3.5);orbs.add(o)}g.add(orbs);
+ const core=new THREE.Mesh(new THREE.SphereGeometry(1,12,10),new THREE.MeshBasicMaterial({color:0xffffff}));g.add(core);
+ return{grp:g,flash:[m.material],tick(e,dt,t){orbs.rotation.y+=dt*1.6;m.rotation.x+=dt*.6;m.rotation.y-=dt*.4;core.scale.setScalar(1+Math.sin(t/80)*.3)}}}
 function mkMini(){const g=new THREE.Group();const m=new THREE.Mesh(new THREE.TetrahedronGeometry(.55),body(0x33ff88));g.add(m);
  return{grp:g,flash:[m.material],tick(e,dt){m.rotation.x+=dt*4;m.rotation.y+=dt*3}}}
 function mkBossA(){const g=new THREE.Group();const m=new THREE.Mesh(new THREE.DodecahedronGeometry(2.4),body(0xff0000,1));g.add(m);
@@ -156,31 +164,37 @@ function mkBossB(){const g=new THREE.Group();const m=new THREE.Mesh(new THREE.Oc
  const spikes=new THREE.Group();for(let i=0;i<8;i++){const s=new THREE.Mesh(new THREE.ConeGeometry(.4,2.2,4),body(0x00eeff,1.3));const a=i/8*Math.PI*2;s.position.set(Math.cos(a)*2.8,0,Math.sin(a)*2.8);s.rotation.z=Math.cos(a)*-Math.PI/2;s.rotation.x=Math.sin(a)*Math.PI/2;spikes.add(s)}g.add(spikes);
  const eye=new THREE.Mesh(new THREE.SphereGeometry(.9,14,10),new THREE.MeshBasicMaterial({color:0xff0000}));eye.position.y=.4;g.add(eye);
  return{grp:g,flash:[m.material],tick(e,dt,t){spikes.rotation.y+=dt*2;m.rotation.y-=dt;eye.scale.setScalar(1+Math.sin(t/90)*.25)}}}
-const FACT={chaser:mkChaser,dasher:mkDasher,shooter:mkShooter,tank:mkTank,splitter:mkSplitter,mini:mkMini,bossA:mkBossA,bossB:mkBossB};
+const FACT={chaser:mkChaser,dasher:mkDasher,shooter:mkShooter,tank:mkTank,splitter:mkSplitter,bomber:mkBomber,bossC:mkBossC,mini:mkMini,bossA:mkBossA,bossB:mkBossB};
 const ESTAT={chaser:{hp:20,spd:4.4,r:1,sc:10,dmg:10},mini:{hp:8,spd:5.5,r:.6,sc:5,dmg:6},
  dasher:{hp:30,spd:3.4,r:1,sc:20,dmg:14},shooter:{hp:28,spd:2.6,r:1,sc:20,dmg:10},
  tank:{hp:100,spd:1.9,r:1.5,sc:40,dmg:18},splitter:{hp:45,spd:3,r:1.3,sc:30,dmg:10},
+ bomber:{hp:35,spd:3.6,r:1.1,sc:25,dmg:0},bossC:{hp:900,spd:1.8,r:2.6,sc:700,dmg:25},
  bossA:{hp:650,spd:2,r:2.6,sc:500,dmg:25},bossB:{hp:750,spd:2.4,r:2.6,sc:600,dmg:25}};
 // ---- game state ----
-let P,bullets=[],ebul=[],enemies=[],parts=[],gems=[],level,score,kills,toSpawn,spawnT,state="menu",shake=0,msgT=0,subT=0,stopT=0,combo=0,comboT=0,best=0;
+let blades=[],P,bullets=[],ebul=[],enemies=[],parts=[],gems=[],level,score,kills,toSpawn,spawnT,state="menu",shake=0,msgT=0,subT=0,stopT=0,combo=0,comboT=0,best=0;
 try{best=+localStorage.ns3best||0}catch(e){}
 const keys={};let joy={x:0,y:0},dashReq=false;
 function newGame(){
  for(const a of [bullets,ebul,enemies,parts,gems])a.forEach(o=>scene.remove(o.grp||o.m));
+ blades.forEach(m=>scene.remove(m));blades=[];
  bullets=[];ebul=[];enemies=[];parts=[];gems=[];
- P={x:0,z:0,hp:100,max:100,dmg:10,rate:3.2,spd:9,multi:1,dashCd:0,dashMax:1.6,dashT:0,inv:0,cd:0,face:0,regen:0,pierce:0,crit:0,flak:0,dx:0,dz:1};
+ P={x:0,z:0,hp:100,max:100,dmg:10,rate:3.2,spd:9,multi:1,dashCd:0,dashMax:1.6,dashT:0,inv:0,cd:0,face:0,regen:0,pierce:0,crit:0,flak:0,dx:0,dz:1,orb:0,steal:0,dshield:0,mag:0};
  level=0;score=0;kills=0;combo=0;nextLevel();state="play";
 }
 function say(t,sub,ms=1800){$("msg").textContent=t;$("msg").style.opacity=1;msgT=ms/1000;
  if(sub){$("sub").textContent=sub;$("sub").style.opacity=1;subT=ms/1000}}
-const SUBT={chaser:"بيلاحقك على طول",dasher:"بيشحن وبيخطف — ابعد عن خطه",shooter:"بيضرب من بعيد",tank:"بطيء بس قوي",splitter:"بيترك أشبال لو مات",bossA:"زعيم: دوائر النار",bossB:"زعيم: الأشواك الزرقا"};
+const SUBT={chaser:"بيلاحقك على طول",dasher:"بيشحن وبيخطف — ابعد عن خطه",shooter:"بيضرب من بعيد",tank:"بطيء بس قوي",splitter:"بيترك أشبال لو مات",bossA:"زعيم: دوائر النار",bomber:"قنبلة: ابعد قبل ما تنفجر",bossC:"زعيم: بيستدعي أتباعه",bossB:"زعيم: الأشواك الزرقا"};
+const THEMES=[[0x05010f,0x150636,0xff44ff],[0x021018,0x06283a,0x44ffcc],[0x120208,0x3a0a1e,0xff6644],[0x080a02,0x243306,0xccff44],[0x0a0220,0x2a0a66,0x66aaff]];
+function theme(l){const t=THEMES[Math.floor((l-1)/2)%THEMES.length];scene.background.setHex(t[0]);scene.fog.color.setHex(t[0]);pad.material.color.setHex(t[1]);rim.color.setHex(t[2])}
 function nextLevel(){
  level++;const boss=level%5==0;
- toSpawn=[];const n=4+level*2;
+ toSpawn=[];const n=Math.min(42,4+level*2);
  for(let i=0;i<n;i++){const r=Math.random();
   const dsh=level>=2?.14:0,spl=level>=3?.12:0;
   toSpawn.push(r<.14+level*.015?"tank":r<.14+level*.015+spl?"splitter":r<.14+level*.015+spl+.18+level*.02?"shooter":r<.14+level*.015+spl+.18+level*.02+dsh?"dasher":"chaser")}
- if(boss)toSpawn=[level%10==0?"bossB":"bossA"];
+ if(level>=4)for(let i=0;i<toSpawn.length;i++)if(toSpawn[i]=="chaser"&&Math.random()<.2)toSpawn[i]="bomber";
+ if(boss)toSpawn=[level%15==0?"bossC":level%10==0?"bossB":"bossA"];
+ theme(level);
  spawnT=1;SFX.boss&&boss&&SFX.boss();
  say(boss?"⚠ زعيم المرحلة "+AR(level):"المرحلة "+AR(level),boss?SUBT[toSpawn[0]]:null);
 }
@@ -188,8 +202,10 @@ function spawn(t){
  const a=Math.random()*Math.PI*2;
  const x=Math.max(-ARENA+2,Math.min(ARENA-2,P.x+Math.cos(a)*14)),z=Math.max(-ARENA+2,Math.min(ARENA-2,P.z+Math.sin(a)*14));
  const st=ESTAT[t],hp=st.hp*(1+level*.12);
+ const el=level>=6&&!t.startsWith("boss")&&t!="mini"&&Math.random()<.1+Math.min(.15,level*.005);
  const f=FACT[t]();f.grp.position.set(x,t.startsWith("boss")?2.6:1,z);scene.add(f.grp);
- const e={grp:f.grp,flash:f.flash,tick:f.tick,t,x,z,hp,max:hp,spd:st.spd*(1+level*.02),cd:R(1,2.5),r:st.r,hit:0,aim:0,tele:0,state:0,st:0};
+ if(el){const hl=new THREE.Mesh(new THREE.TorusGeometry(1.5,.08,6,24),new THREE.MeshBasicMaterial({color:0xffd700}));hl.rotation.x=Math.PI/2;f.grp.add(hl)}
+ const e={grp:f.grp,flash:f.flash,tick:f.tick,t,x,z,el,hp:hp*(el?2.5:1),max:hp*(el?2.5:1),spd:st.spd*(1+level*.02),cd:R(1,2.5),r:st.r,hit:0,aim:0,tele:0,state:0,st:0};
  if(!enemies.some(q=>q.t==t)&&SUBT[t]&&state=="play")say(SUBT[t],null,1200);
  enemies.push(e);
 }
@@ -204,32 +220,38 @@ function shoot(dx,dz,dmg,crit){const m=new THREE.Mesh(bGeo,crit?pbCrit:pbMat);if
  m.position.set(P.x,1,P.z);scene.add(m);bullets.push({m,x:P.x,z:P.z,vx:dx*27,vz:dz*27,l:1.1,dmg,pierce:P.pierce,crit});
  muzzle.visible=true;muzzle.material.opacity=1}
 function hurt(d){if(P.inv>0||state!="play")return;P.hp-=d;P.inv=.5;shake=Math.max(shake,.5);combo=0;
- boom(P.x,1,P.z,0xff0044,10);SFX.hurt();$("vig").style.opacity=1;setTimeout(()=>$("vig").style.opacity=0,130);
+ boom(P.x,1,P.z,0xff0044,10);SFX.hurt();try{navigator.vibrate&&navigator.vibrate(45)}catch(e){}$("vig").style.opacity=1;setTimeout(()=>$("vig").style.opacity=0,130);
  if(P.hp<=0){P.hp=0;gameOver()}}
-function gameOver(){state="over";best=Math.max(best,score);try{localStorage.ns3best=best}catch(e){}
- $("fin").textContent="وصلت المرحلة "+AR(level)+" · نقاطك "+AR(score)+" · قتلت "+AR(kills)+(best>score?" · الأفضل: "+AR(best):" · رقم قياسي جديد!");
+function gameOver(){state="over";let bl=0;try{bl=Math.max(+localStorage.ns3lv||0,level);localStorage.ns3lv=bl}catch(e){}best=Math.max(best,score);try{localStorage.ns3best=best}catch(e){}
+ $("fin").textContent="وصلت المرحلة "+AR(level)+" · نقاطك "+AR(score)+" · قتلت "+AR(kills)+(best>score?" · الأفضل: "+AR(best):" · رقم قياسي جديد!")+" · أعلى مرحلة: "+AR(bl);
  $("over").classList.add("on")}
 const UPS=[["🔫","ضرر +٣٥٪",()=>P.dmg*=1.35],["⚡","سرعة ضرب +٣٠٪",()=>P.rate*=1.3],
  ["🔱","طلقة إضافية",()=>P.multi=Math.min(5,P.multi+1)],["❤️","صحة +٤٠ وعلاج كامل",()=>{P.max+=40;P.hp=P.max}],
  ["👟","سرعة حركة +١٥٪",()=>P.spd*=1.15],["🩸","شفاء بطيء مستمر",()=>P.regen+=1.5],
  ["💥","طلقات تخترق الأعداء",()=>P.pierce+=1],["🎯","ضربات قاضية +١٥٪",()=>P.crit+=.15],
- ["🧲","شظايا قاتلة عند الضرب",()=>P.flak+=2],["💨","اندفاع أسرع +٣٠٪",()=>P.dashMax*=.7]];
+ ["🧲","شظايا قاتلة عند الضرب",()=>P.flak+=2],["💨","اندفاع أسرع +٣٠٪",()=>P.dashMax*=.7],
+ ["🌀","شفرات بتدور حواليك",()=>P.orb=Math.min(6,P.orb+2)],["🧛","شفاء مع كل قتلة",()=>P.steal+=1.5],
+ ["🛡️","درع بعد الاندفاع",()=>P.dshield+=.6],["🧲","مغناطيس جواهر أقوى",()=>P.mag+=4]];
 function showUp(){state="up";SFX.up();const c=$("cards");c.innerHTML="";
  [...UPS].sort(()=>Math.random()-.5).slice(0,3).forEach(u=>{const b=document.createElement("button");b.className="card";b.innerHTML="<b>"+u[0]+"</b>"+u[1];
   b.onclick=()=>{u[2]();$("up").classList.remove("on");nextLevel();state="play"};c.appendChild(b)});
  $("up").classList.add("on")}
+const pkGeo=new THREE.TorusGeometry(.45,.16,8,14);
+function dropPickup(x,z){const kind=Math.random()<.6?"heal":"shield";const m=new THREE.Mesh(pkGeo,new THREE.MeshBasicMaterial({color:kind=="heal"?0xff4466:0x44ffff}));m.position.set(x,1,z);scene.add(m);gems.push({m,x,z,vx:R(-2,2),vz:R(-2,2),kind,life:14})}
 function dropGems(x,z,n){for(let i=0;i<n&&gems.length<60;i++){const m=new THREE.Mesh(gemGeo,gemMat);
  m.position.set(x+R(-.5,.5),1,z+R(-.5,.5));scene.add(m);gems.push({m,x:m.position.x,z:m.position.z,vx:R(-3,3),vz:R(-3,3)})}}
 function killEnemy(e){
- boom(e.x,1,e.z,ESTAT[e.t]?({chaser:0xff3355,mini:0x33ff88,dasher:0xffdd22,shooter:0xaa44ff,tank:0xff9900,splitter:0x33ff88,bossA:0xff0000,bossB:0x0044ff})[e.t]:0xffffff,e.t.startsWith("boss")?60:e.t=="tank"?22:14);
+ boom(e.x,1,e.z,ESTAT[e.t]?({bomber:0xff2200,bossC:0x22ff66,chaser:0xff3355,mini:0x33ff88,dasher:0xffdd22,shooter:0xaa44ff,tank:0xff9900,splitter:0x33ff88,bossA:0xff0000,bossB:0x0044ff})[e.t]:0xffffff,e.t.startsWith("boss")?60:e.t=="tank"?22:14);
  ringFX(e.x,e.z,0xffffff);
  combo++;comboT=3;const cm=1+Math.min(combo,20)*.05;
  score+=Math.round(ESTAT[e.t].sc*cm);kills++;
- if(combo>0&&combo%10==0){say("سلسلة ×"+AR(combo),null,900);SFX.combo(Math.min(combo,20))}
+ if(combo>0&&combo%10==0){P.hp=Math.min(P.max,P.hp+3);say("سلسلة ×"+AR(combo)+" +٣ صحة",null,900);SFX.combo(Math.min(combo,20))}
+if(P.steal>0)P.hp=Math.min(P.max,P.hp+P.steal);
+ if(e.el||e.t.startsWith("boss")||Math.random()<.04)dropPickup(e.x,e.z);
  SFX.kill();dropGems(e.x,e.z,e.t.startsWith("boss")?14:e.t=="tank"?5:2);
  if(e.t=="splitter")for(let i=0;i<3;i++){const f=FACT.mini();f.grp.position.set(e.x+R(-1,1),1,e.z+R(-1,1));scene.add(f.grp);
   enemies.push({grp:f.grp,flash:f.flash,tick:f.tick,t:"mini",x:e.x+R(-1,1),z:e.z+R(-1,1),hp:ESTAT.mini.hp*(1+level*.12),max:ESTAT.mini.hp,spd:ESTAT.mini.spd,cd:1,r:ESTAT.mini.r,hit:0,aim:0,tele:0,state:0,st:0})}
- if(e.t.startsWith("boss")){shake=1;stopT=.25;say("الزعيم اتهزم! +"+AR(ESTAT[e.t].sc),null,1500)}
+ if(e.t.startsWith("boss")){try{navigator.vibrate&&navigator.vibrate([60,40,140])}catch(x){}shake=1;stopT=.25;say("الزعيم اتهزم! +"+AR(ESTAT[e.t].sc),null,1500)}
  scene.remove(e.grp);
 }
 function update(dt,t){
@@ -240,7 +262,7 @@ function update(dt,t){
  // movement
  let mx=joy.x+(keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0),mz=joy.y+(keys.s||keys.arrowdown?1:0)-(keys.w||keys.arrowup?1:0);
  const ml=Math.hypot(mx,mz);if(ml>1){mx/=ml;mz/=ml}
- if((dashReq||keys[" "])&&P.dashCd<=0){P.dashCd=P.dashMax;P.dashT=.18;P.inv=Math.max(P.inv,.3);SFX.dash();
+ if((dashReq||keys[" "])&&P.dashCd<=0){P.dashCd=P.dashMax;P.dashT=.18;P.inv=Math.max(P.inv,.3+P.dshield);SFX.dash();
   P.dx=ml>.1?mx:Math.sin(P.face);P.dz=ml>.1?mz:Math.cos(P.face);ringFX(P.x,P.z,0x00ffff)}
  dashReq=false;P.dashCd-=dt;P.inv-=dt;
  let sp=P.spd;if(P.dashT>0){P.dashT-=dt;mx=P.dx;mz=P.dz;sp=32;boom(P.x,1,P.z,0x00ffff,2,2)}
@@ -257,6 +279,10 @@ function update(dt,t){
  // spawn
  if(toSpawn.length){spawnT-=dt;if(spawnT<=0){spawn(toSpawn.shift());spawnT=Math.max(.3,1.1-level*.045)}}
  else if(!enemies.length){score+=level*50;showUp()}
+ while(blades.length<P.orb){const m=new THREE.Mesh(new THREE.BoxGeometry(.3,.3,1.5),new THREE.MeshBasicMaterial({color:0xff66ff}));scene.add(m);blades.push(m)}
+ for(let i=0;i<blades.length;i++){const a=t/280+i/blades.length*Math.PI*2,bx=P.x+Math.cos(a)*3.2,bz=P.z+Math.sin(a)*3.2;blades[i].position.set(bx,1,bz);blades[i].rotation.y=-a;
+  for(const e of enemies)if(e.hp>0&&!((e.oc||0)>0)&&(bx-e.x)**2+(bz-e.z)**2<(e.r+.8)**2){e.hp-=P.dmg*.8;e.hit=.1;e.oc=.35;boom(bx,1,bz,0xff66ff,2,3)}}
+ for(const e of enemies)if(e.oc>0)e.oc-=dt;
  // player bullets
  for(const b of bullets){b.x+=b.vx*dt;b.z+=b.vz*dt;b.l-=dt;b.m.position.set(b.x,1,b.z);b.m.rotation.y+=dt*8;
   for(const e of enemies){if(e.hp>0&&!b.dead&&b.last!==e&&(b.x-e.x)**2+(b.z-e.z)**2<(e.r+.35)**2){
@@ -277,6 +303,9 @@ function update(dt,t){
     if(d<9){e.state=1;e.tele=.7}}
    else if(e.state==1){e.tele-=dt;e.aim=Math.atan2(dx,dz);if(e.tele<=0){e.state=2;e.st=.45;e.vx=Math.sin(e.aim)*26;e.vz=Math.cos(e.aim)*26}}
    else{e.x+=e.vx*dt;e.z+=e.vz*dt;e.st-=dt;boom(e.x,1,e.z,0xffdd22,1,1);if(e.st<=0){e.state=0;e.cd=1.5}}
+  }else if(e.t=="bomber"){
+   if(e.state==0){e.x+=dx/d*e.spd*dt;e.z+=dz/d*e.spd*dt;if(d<4.2){e.state=1;e.st=.9}}
+   else{e.st-=dt;if(e.st<=0){ringFX(e.x,e.z,0xff4400);ringFX(e.x,e.z,0xffaa00);boom(e.x,1,e.z,0xff6600,24,9);shake=Math.max(shake,.6);SFX.hurt();if(Math.hypot(P.x-e.x,P.z-e.z)<5)hurt(22);e.hp=0}}
   }else if(e.t.startsWith("boss")){
    const dir=d>10?1:-.4;e.x+=dx/d*e.spd*dir*dt;e.z+=dz/d*e.spd*dir*dt;
   }else{
@@ -286,10 +315,10 @@ function update(dt,t){
   e.x=Math.max(-ARENA+1,Math.min(ARENA-1,e.x));e.z=Math.max(-ARENA+1,Math.min(ARENA-1,e.z));
   e.grp.position.set(e.x,e.t.startsWith("boss")?2.6:1,e.z);
   e.tick(e,dt,t);
-  const fl=e.hit>0?1.18:1;e.grp.scale.setScalar(fl);
+  const fl=(e.hit>0?1.18:1)*(e.el?1.35:1);e.grp.scale.setScalar(fl);
   if(e.hit>0){e.hit-=dt;for(const mt of e.flash)mt.emissiveIntensity=3}
   else for(const mt of e.flash)mt.emissiveIntensity=.9;
-  if(d<e.r+.7&&e.t!="dasher")hurt(e.t.startsWith("boss")?25:ESTAT[e.t].dmg);
+  if(d<e.r+.7&&e.t!="dasher"&&e.t!="bomber")hurt(e.t.startsWith("boss")?25:ESTAT[e.t].dmg);
   if(e.t=="dasher"&&e.state==2&&d<e.r+.9)hurt(ESTAT.dasher.dmg);
   // enemy shots
   if(e.t=="shooter"){e.cd-=dt;if(e.cd<=0&&d<18){e.cd=2.1;const a=Math.atan2(dx,dz);
@@ -298,6 +327,10 @@ function update(dt,t){
   if(e.t=="bossA"){e.cd-=dt;if(e.cd<=0){e.cd=e.hp<e.max*.4?.7:1.1;
    for(let i=0;i<8;i++){const a=i/8*Math.PI*2+e.grp.rotation.y;const m=new THREE.Mesh(bGeo,ebMat);m.scale.setScalar(1.4);m.position.set(e.x,2,e.z);scene.add(m);
     ebul.push({m,x:e.x,z:e.z,vx:Math.sin(a)*9,vz:Math.cos(a)*9,l:4.5,d:14})}}}
+  if(e.t=="bossC"){e.cd-=dt;e.sm=(e.sm===undefined?3:e.sm)-dt;
+   if(e.cd<=0){e.cd=e.hp<e.max*.4?.16:.26;e.sa=(e.sa||0)+.5;for(let k=0;k<2;k++){const a=e.sa+k*Math.PI;const m=new THREE.Mesh(bGeo,ebMat);m.scale.setScalar(1.3);m.position.set(e.x,2,e.z);scene.add(m);
+    ebul.push({m,x:e.x,z:e.z,vx:Math.sin(a)*9,vz:Math.cos(a)*9,l:4.5,d:12})}}
+   if(e.sm<=0&&enemies.length<14){e.sm=e.hp<e.max*.4?3:5;for(let k=0;k<3;k++)spawn(k==0&&level>=20?"shooter":"chaser")}}
   if(e.t=="bossB"){e.cd-=dt;if(e.cd<=0){e.cd=e.hp<e.max*.4?.8:1.3;
    for(let i=0;i<3;i++){const a=Math.atan2(dx,dz)+(i-1)*.25;const m=new THREE.Mesh(bGeo,ebMat);m.scale.setScalar(1.5);m.position.set(e.x,2,e.z);scene.add(m);
     ebul.push({m,x:e.x,z:e.z,vx:Math.sin(a)*12,vz:Math.cos(a)*12,l:4,d:14})}
@@ -308,10 +341,12 @@ function update(dt,t){
  enemies=enemies.filter(e=>e.hp>0);
  // gems
  for(const g of gems){const dx=P.x-g.x,dz=P.z-g.z,d=Math.hypot(dx,dz)||1;
-  if(d<6){g.vx+=dx/d*40*dt;g.vz+=dz/d*40*dt}
+  if(d<6+P.mag||(g.kind&&d<9)){g.vx+=dx/d*40*dt;g.vz+=dz/d*40*dt}
   g.x+=g.vx*dt;g.z+=g.vz*dt;g.vx*=.92;g.vz*=.92;
   g.m.position.set(g.x,1+Math.sin(t/150+g.x)*.2,g.z);g.m.rotation.y+=dt*4;
-  if(d<1.1){g.dead=true;SFX.gem();P.dashCd=Math.max(0,P.dashCd-.25);score+=5;boom(g.x,1,g.z,0x00ff99,3,2)}}
+  if(g.kind&&(g.life-=dt)<=0)g.dead=true;
+  if(d<1.1&&g.kind){g.dead=true;SFX.up();if(g.kind=="heal"){P.hp=Math.min(P.max,P.hp+P.max*.25);say("+ صحة",null,600)}else{P.inv=Math.max(P.inv,4);say("درع!",null,600)}boom(g.x,1,g.z,g.kind=="heal"?0xff4466:0x44ffff,10,4);ringFX(g.x,g.z,0xffffff)}
+  else if(d<1.1){g.dead=true;SFX.gem();P.dashCd=Math.max(0,P.dashCd-.25);score+=5;boom(g.x,1,g.z,0x00ff99,3,2)}}
  gems=gems.filter(g=>{if(g.dead){scene.remove(g.m);return false}return true});
  // particles
  for(const p of parts){p.l-=dt;
@@ -363,7 +398,7 @@ st.addEventListener("pointerup",jend);st.addEventListener("pointercancel",jend);
 $("dash").addEventListener("pointerdown",()=>dashReq=true);
 $("go").onclick=()=>{if(!AC)try{AC=new (window.AudioContext||window.webkitAudioContext)()}catch(e){}$("start").classList.remove("on");newGame()};
 $("again").onclick=()=>{$("over").classList.remove("on");newGame()};
-window.SC=scene;window.G={get s(){return{state,level,score,kills,hp:P&&P.hp,en:enemies.length,q:toSpawn&&toSpawn.length,bul:bullets.length,gems:gems.length,combo,gl:renderer.getContext().constructor.name,fps:Math.round(1/Math.max(.001,(performance.now()-last)/1000))}},
+window.SC=scene;window.G={blades:()=>blades.length,P:()=>P,get s(){return{state,level,score,kills,hp:P&&P.hp,en:enemies.length,q:toSpawn&&toSpawn.length,bul:bullets.length,gems:gems.length,combo,gl:renderer.getContext().constructor.name,fps:Math.round(1/Math.max(.001,(performance.now()-last)/1000))}},
  spawn:t=>spawn(t),cheat(){if(P){P.dmg=500;P.hp=P.max=9999}},start:()=>$("go").click(),
  pick:()=>{const b=document.querySelector(".card");b&&b.click()},stand(x,z){P.x=x;P.z=z},
  kill(){enemies.forEach(e=>e.hp=0)},sethp(v){P.hp=v;P.inv=0},hitme(d){P.inv=0;hurt(d)},jump(n){enemies.forEach(e=>scene.remove(e.grp));enemies=[];toSpawn=[];level=n-1;nextLevel()}};
@@ -371,3 +406,4 @@ requestAnimationFrame(frame);
 </script>
 </body>
 </html>
+
